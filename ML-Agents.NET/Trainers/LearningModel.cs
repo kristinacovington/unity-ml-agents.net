@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Text;
 using Tensorflow;
 using static Tensorflow.Binding;
+using static Tensorflow.KerasApi;
 using System.Linq;
+using Tensorflow.Keras.Optimizers;
 using Tensorflow.Operations.Activation;
 using NumSharp;
 
@@ -14,7 +16,7 @@ namespace Tensorflow.Unity3D.Trainers
         protected int _version_number_ = 2;
         protected BrainParameters brain;
 
-        protected RefVariable global_step;
+        protected ResourceVariable global_step;
         protected Tensor steps_to_increment;
         protected Tensor increment_step;
         public Tensor batch_size;
@@ -87,10 +89,10 @@ namespace Tensorflow.Unity3D.Trainers
                 );
         }
 
-        private (RefVariable, Tensor, Tensor) create_global_steps()
+        private (ResourceVariable, Tensor, Tensor) create_global_steps()
         {
-            var global_step = tf.Variable(0, name: "global_step", trainable: false, dtype: tf.int32);
-            var steps_to_increment = tf.placeholder(shape:new int[0], dtype: tf.int32, name: "steps_to_increment");
+            var global_step = tf.Variable(0, name: "global_step", trainable: false, dtype: tf.float32);
+            var steps_to_increment = tf.placeholder(shape:new int[0], dtype: tf.float32, name: "steps_to_increment");
             var increment_step = tf.assign(global_step, tf.add(global_step, steps_to_increment));
             return (global_step, increment_step, steps_to_increment);
         }
@@ -110,7 +112,7 @@ namespace Tensorflow.Unity3D.Trainers
             EncoderType vis_encode_type = EncoderType.SIMPLE,
             List<string> stream_scopes = null)
         {
-            IActivation activation_fn = tf.nn.swish();
+            Keras.Activation activation_fn = new swish().Activate;
 
             var visual_in = range(brain.number_visual_observations)
                 .Select(i => create_visual_input(brain.camera_resolutions[i], name: $"visual_observation_{i}"))
@@ -167,7 +169,7 @@ namespace Tensorflow.Unity3D.Trainers
 
         public Tensor create_vector_observation_encoder(Tensor observation_input,
             int h_size,
-            IActivation activation,
+            Keras.Activation activation,
             int num_layers,
             string scope,
             bool reuse)
@@ -177,7 +179,7 @@ namespace Tensorflow.Unity3D.Trainers
                 var hidden = observation_input;
                 foreach(int i in range(num_layers))
                 {
-                    hidden = tf.layers.dense(
+                    hidden = keras.layers.dense(
                         hidden,
                         h_size,
                         activation: activation,
@@ -280,21 +282,41 @@ namespace Tensorflow.Unity3D.Trainers
         {
             foreach(var name in stream_names)
             {
-                var value = tf.layers.dense(hidden_input, 1, name: $"{name}_value");
+                var value = keras.layers.dense(hidden_input, 1, name: $"{name}_value");
                 value_heads[name] = value;
             }
             value = tf.reduce_mean(list(value_heads.Values), 0);
         }
 
-        public Tensor create_learning_rate(LearningRateSchedule lr_schedule, float lr, RefVariable global_step,
+        public Tensor create_learning_rate(LearningRateSchedule lr_schedule, float lr, ResourceVariable global_step,
             float max_step)
         {
             /*if (lr_schedule == LearningRateSchedule.CONSTANT)
                 learning_rate = tf.Variable(lr);
             else */if (lr_schedule == LearningRateSchedule.LINEAR)
-                return tf.train.polynomial_decay(
-                    lr, global_step, max_step, 1e-10f, power: 1.0f);
+                return polynomial_decay(
+                     lr, global_step, max_step, 1e-10f, power: 1.0f);
             throw new NotImplementedException("create_learning_rate");
+        }
+
+        public Tensor polynomial_decay(float learning_rate,
+                        ResourceVariable global_step,
+                        float decay_steps,
+                        float end_learning_rate = 0.0001f,
+                        float power = 1.0f,
+                        bool cycle = false,
+                        string name = null)
+        {
+            var decayed = new PolynomialDecay(learning_rate,
+                    decay_steps,
+                    end_learning_rate: end_learning_rate,
+                    power: power,
+                    cycle: cycle,
+                    name: name);
+
+            var decayed_lr = decayed.__call__(global_step);
+
+            return decayed_lr;
         }
     }
 }

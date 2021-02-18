@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 using static Tensorflow.Binding;
+using static Tensorflow.KerasApi;
 using NumSharp;
 
 namespace Tensorflow.Unity3D.Trainers
@@ -110,9 +111,9 @@ namespace Tensorflow.Unity3D.Trainers
             }
             advantage = tf.placeholder(shape: -1, dtype: tf.float32, name: "advantages");
             advantage = tf.expand_dims(advantage, -1);
-            var decay_epsilon = tf.train.polynomial_decay(
+            var decay_epsilon = polynomial_decay(
                 epsilon, global_step, max_step, 0.1f, power: 1.0f);
-            var decay_beta = tf.train.polynomial_decay(
+            var decay_beta = polynomial_decay(
                 beta, global_step, max_step, 1e-5f, power: 1.0f);
 
             var value_losses = new List<Tensor>();
@@ -158,7 +159,7 @@ namespace Tensorflow.Unity3D.Trainers
                 throw new NotImplementedException("create_dc_actor_critic use_recurrent");
             }
 
-            var policy_branches = act_size.Select(size => tf.layers.dense(hidden,
+            var policy_branches = act_size.Select(size => keras.layers.dense(hidden,
                 size,
                 use_bias: false,
                 kernel_initializer: scaled_init(0.01f))).ToArray();

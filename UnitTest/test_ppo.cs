@@ -55,6 +55,8 @@ namespace UnitTests
         [TestMethod]
         public void test_ppo_model_dc_vector()
         {
+            tf.compat.v1.disable_eager_execution();
+
             tf.reset_default_graph();
 
             tf_with(tf.variable_scope("FakeGraphScope"), delegate
